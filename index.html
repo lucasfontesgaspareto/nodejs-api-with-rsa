@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+
+  <div>
+    <button id="generatePublicKey">generate public key</button>
+    <textarea id="publicKey" name="" id="" cols="80" rows="12"></textarea>
+
+    <hr/>
+
+    <input id="msg" type="text" placeholder="message to encode">
+    <button id="encodeMsg">encode message</button>
+    <textarea id="encodedMsg" name="" id="" cols="80" rows="12"></textarea>
+
+    <hr/>
+
+    <button id="decodeMsg">decode from server</button>
+    <input id="decodedMsg" type="text" placeholder="decoded msg from server" readonly>
+  </div>
+
+  <script>
+    class RSA {
+      config = {
+        name: 'RSA-OAEP',
+        hash: {
+          name: 'SHA-1'
+        }
+      }
+
+      crypto = window.crypto.subtle
+
+      constructor({ privateKey, publicKey }) {
+        this.privateKey = privateKey
+        this.publicKey = publicKey
+      }
+
+      async encrypt(message) {
+        const data = RSA.textToBuffer(message)
+
+        const key = await this.importPublicKey(this.publicKey)
+        
+        const encrypted = await this.crypto
+          .encrypt(this.config, key, data)
+        
+        return RSA.bufferToBase64(encrypted)
+      }
+
+      async decrypt(message) {
+        const data = RSA.base64ToBuffer(message)
+
+        const key = await this.importPrivateKey(this.privateKey)
+        
+        const decrypted = await this.crypto
+          .decrypt(this.config, key, data)
+        
+        return RSA.bufferToText(decrypted)
+      }
+
+      async importPublicKey(publicKey) {
+        const base64Key = RSA.keyToBase64(publicKey)
+        const binaryKey = RSA.base64ToBuffer(base64Key)
+
+        return await this.crypto.importKey(
+          'spki',
+          binaryKey,
+          this.config,
+          false,
+          ['encrypt']
+        )
+      }
+
+      async importPrivateKey(privateKey) {
+        const base64Key = RSA.keyToBase64(privateKey)
+        const binaryKey = RSA.base64ToBuffer(base64Key)
+
+        return await this.crypto.importKey(
+          'pkcs8',
+          binaryKey,
+          this.config,
+          false,
+          ['decrypt']
+        )
+      }
+
+      static textToBuffer(text) {
+        return new TextEncoder("utf-8").encode(text)
+      }
+
+      static bufferToText(arrayBuffer) {
+        return new TextDecoder("utf-8").decode(arrayBuffer)
+      }
+      
+      static keyToBase64(key) {
+        return [
+          '-----BEGIN PRIVATE KEY-----',
+          '-----END PRIVATE KEY-----',
+          '-----BEGIN PUBLIC KEY-----',
+          '-----END PUBLIC KEY-----',
+        ].reduce(
+          (text, txt) => text.replace(txt, ''), key
+        ).replace(/\n/g, '')
+      }
+
+      static base64ToBuffer(base64) {
+        const binaryText = atob(base64)
+
+        let bytes = new Uint8Array(binaryText.length)
+
+        for (let i = 0; i < binaryText.length; i++) {
+          bytes[i] = binaryText.charCodeAt(i)
+        }
+        
+        return bytes.buffer;
+      }
+
+      static bufferToBase64(arrayBuffer) {
+        const byteArray = new Uint8Array(arrayBuffer)
+        
+        let byteString = '';
+        
+        for (let i = 0; i < byteArray.byteLength; i++) {
+          byteString += String.fromCharCode(byteArray[i]);
+        }
+
+        return btoa(byteString);
+      }
+      
+    }
+
+    const store = {}
+
+    document.getElementById('generatePublicKey').onclick = function generatePublicKey() {
+      fetch('/publicKey')
+      .then(res => res.json())
+      .then(result => {
+        document.getElementById('publicKey').value = result.publicKey
+        store.publicKey = result.publicKey
+      })
+    }
+
+    document.getElementById('encodeMsg').onclick = function encodeMsg() {
+      const rsa = new RSA({
+        publicKey: store.publicKey
+      })
+
+      rsa.encrypt(document.getElementById('msg').value).then(result => {
+        document.getElementById('encodedMsg').value = result
+      })
+    }
+
+    document.getElementById('decodeMsg').onclick = function encodeMsg() {
+      fetch('/decode', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: document.getElementById('encodedMsg').value
+        })
+      })
+      .then(res => res.json())
+      .then(result => {
+        document.getElementById('decodedMsg').value = result.decode
+      })
+    }
+  </script>
+</body>
+</html>
