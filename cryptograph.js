@@ -1,5 +1,4 @@
 const crypto = require('crypto')
-const NodeRSA = require('node-rsa')
 
 const TXT_TO_REPLACE = [
   '-----BEGIN PRIVATE KEY-----',
@@ -18,12 +17,21 @@ class RSA {
   }
 
   generate() {
-    const key = new NodeRSA()
-    
-    key.generateKeyPair(2048, 65537)
+    const keyObject = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicExponent: 65537,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      }
+    })
 
-    this.publicKey = key.exportKey('pkcs8-public-pem')
-    this.privateKey = key.exportKey('pkcs8-private-pem')
+    this.publicKey = keyObject.publicKey
+    this.privateKey = keyObject.privateKey
   }
 
   encrypt(data) {
@@ -40,7 +48,7 @@ class RSA {
       key: this.privateKey,
       padding: crypto.constants.RSA_PKCS1_OAEP_PADDING
     }, Buffer.from(data, 'base64'))
-    
+
     return encoded.toString()
   }
 
